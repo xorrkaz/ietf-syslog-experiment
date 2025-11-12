@@ -1,0 +1,1907 @@
+Network Working Group                                        M. Jethanandani
+Internet-Draft                                              Kloud Services
+Intended status: Standards Track                                   J. Clarke
+Expires: 1 November 2025                                             Cisco
+                                                                K. Agrahara
+                                                              Verizon Inc.
+                                                                   C. Wildes
+                                                                 Independent
+                                                                30 April 2025
+
+
+                 A YANG Data Model for Syslog Configuration
+                 draft-ietf-netmod-syslog-yang-00
+
+Abstract
+
+   This document describes a YANG data model for configuring the
+   generation, local handling, and remote delivery of syslog messages.
+   The model augments the systems described in RFCs 5424, 5425, and 5426
+   by providing a structured, data-model-driven interface that can be
+   used by network configuration protocols such as NETCONF and RESTCONF.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 1 November 2025.
+
+Copyright Notice
+
+   Copyright (c) 2025 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
+     1.1.  Terminology and Conventions . . . . . . . . . . . . . . .   3
+     1.2.  NMDA, Datastores, and Tree Diagrams  . . . . . . . . . .   4
+   2.  Overview of the Syslog YANG Module  . . . . . . . . . . . . .   4
+     2.1.  YANG Module Classification  . . . . . . . . . . . . . . .   5
+     2.2.  Relationship to Other Data Models  . . . . . . . . . . .   5
+   3.  Data Model Details . . . . . . . . . . . . . . . . . . . . .   6
+     3.1.  Tree Diagram  . . . . . . . . . . . . . . . . . . . . . .   6
+     3.2.  Actions, Filters, and Structured Data . . . . . . . . . .   7
+   4.  Instance Data Examples . . . . . . . . . . . . . . . . . . .   8
+     4.1.  JSON Representation  . . . . . . . . . . . . . . . . . .   8
+     4.2.  XML Representation . . . . . . . . . . . . . . . . . . .   9
+   5.  YANG Module  . . . . . . . . . . . . . . . . . . . . . . . .  10
+   6.  Manageability Considerations  . . . . . . . . . . . . . . . .  11
+   7.  Implementation Status  . . . . . . . . . . . . . . . . . . .  12
+   8.  Security Considerations  . . . . . . . . . . . . . . . . . .  13
+   9.  Privacy Considerations . . . . . . . . . . . . . . . . . . .  15
+   10. IANA Considerations  . . . . . . . . . . . . . . . . . . . .  15
+   11. References  . . . . . . . . . . . . . . . . . . . . . . . . .  16
+     11.1.  Normative References . . . . . . . . . . . . . . . . . .  16
+     11.2.  Informative References . . . . . . . . . . . . . . . . .  17
+   12. Acknowledgements  . . . . . . . . . . . . . . . . . . . . . .  18
+   13. Contributors . . . . . . . . . . . . . . . . . . . . . . . .  18
+   Appendix A.  pyang Invocation . . . . . . . . . . . . . . . . . .  19
+   Authors' Addresses . . . . . . . . . . . . . . . . . . . . . . .  19
+
+1.  Introduction
+
+   Operators continue to rely on syslog for operational awareness and
+   event forensics, yet device configuration interfaces remain vendor-
+   specific.  This document defines a standards-based data model that
+   allows controllers and management applications to enable syslog,
+   control message selection, and forward structured telemetry entries
+   to remote collectors via either UDP or TLS transports.
+
+   The model in this document follows the guidance in
+   [I-D.ietf-netmod-rfc8407bis] for YANG authoring, includes instance
+   data illustrations, and is structured so that it can serve as the
+   authoritative module text when this draft is published as an RFC.
+
+1.1.  Terminology and Conventions
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+   The terms and architectural components from the Network Management
+   Datastore Architecture (NMDA) [RFC8342] are used throughout this
+   document.  Unless otherwise stated, references to configuration data
+   nodes apply to the <running> datastore and operational state values
+   refer to <operational>.
+
+1.2.  NMDA, Datastores, and Tree Diagrams
+
+   The modeling approach in this specification assumes NMDA compliance
+   and therefore separates configuration from state as described in
+   [RFC8342].  Tree diagrams follow the syntax defined in [RFC8340].
+
+   The tree diagram and schema presented in Section 3 were generated by
+   invoking the pyang tool as described in Appendix A.
+
+2.  Overview of the Syslog YANG Module
+
+   The ietf-syslog module enables or disables syslog, configures actions
+   that determine how messages are consumed locally, and specifies a set
+   of remote destinations that receive filtered log streams.  The
+   primary abstractions provided by the model are:
+
+   *  selectors, which match log messages by facility, severity, and an
+      optional POSIX 1003.2 regular expression;
+
+   *  actions, which consume the selected messages locally (console or
+      file) or forward them to collectors using UDP or TLS;
+
+   *  structured data controls that force RFC 5424 STRUCTURED-DATA
+      elements to be included in exported messages;
+
+   *  an optional signing container based on [RFC5848] for deployments
+      that require origin authenticity and message integrity.
+
+2.1.  YANG Module Classification
+
+   Following the taxonomy in [RFC8309] and [RFC8969], the ietf-syslog
+   module is classified as a Device Model in the sense of [RFC8199].
+   It configures functionality that is implemented within a single
+   network element (console/file logging, transport parameters, signing
+   policy) and does not describe a multi-device service or network view.
+   The module does not define new RPC operations or notifications.
+   Implementations are expected to report resulting state (for example,
+   counters or runtime status) through other YANG modules, such as the
+   operational state nodes of ietf-syslog itself or device-specific
+   augmentations.
+
+2.2.  Relationship to Other Data Models
+
+   The module imports identities and groupings from several IETF data
+   models.  It relies on the interface references defined in
+   [RFC8343] to steer source interfaces, on the TLS client parameters in
+   [RFC9645] to describe secure transports, and on the cryptographic key
+   abstractions provided by [RFC9640].  Standard IP address and port
+   definitions are inherited from [RFC6991].
+
+   The configuration described here is orthogonal to system log control
+   protocols such as syslog-sign [RFC5848]; those extensions are exposed
+   through the signing container under each remote destination.
+
+3.  Data Model Details
+
+   This section summarizes the normative content of the YANG module and
+   highlights key design choices that YANG reviewers typically examine.
+
+3.1.  Tree Diagram
+
+   The high-level structure of the module is shown below.  Optional
+   nodes are annotated with the features that control their presence.  A
+   complete, unabridged tree diagram is provided in Appendix B.
+
+   module: ietf-syslog
+     +--rw syslog!
+        +--rw actions
+           +--rw console! {console-action}?      (selector)
+           +--rw file {file-action}?             (selector, rotation,
+                                                 structured-data)
+           +--rw remote {remote-action}?
+              +--rw destination* [name]
+                 +--rw (transport) (udp | tls w/ client-identity)
+                 +--rw selector
+                 +--rw structured-data? {structured-data}?
+                 +--rw facility-override?
+                 +--rw source-interface?
+                 |       {remote-source-interface}?
+                 +--rw signing! {signed-messages}? (cert-signers,
+                                                   limits)
+
+3.2.  Actions, Filters, and Structured Data
+
+   Selectors combine one or more facility/severity pairs with an
+   optional pattern match.  The severity union allows implementers to
+   express "match none" and "match all" behavior without defining extra
+   identities.  The optional "advanced-compare" container can be enabled
+   when the implementation supports severity comparisons that diverge
+   from the default "equals-or-higher" semantics.
+
+   The console and file actions rely on the selector grouping.  File
+   logging optionally enforces rotation limits either by file size or by
+   retention time.  Remote actions introduce source interface binding,
+   facility overrides, structured-data preferences, transport-specific
+   parameters, and (if the signed-messages feature is supported)
+   signature policies following [RFC5848].
+
+4.  Instance Data Examples
+
+   This section provides a pair of configuration examples that exercise
+   the major model features.  The JSON example follows the conventions
+   in [RFC7951] and the XML example follows [RFC7950].
+
+4.1.  JSON Representation
+
+   The JSON snippet below configures console logging, a rotating local
+   file, and a remote UDP-based collector.
+
+   {
+     "ietf-syslog:syslog": {
+       "actions": {
+         "console": {
+           "filter": {
+             "facility-list": [
+               {
+                 "facility": "all",
+                 "severity": "warning"
+               }
+             ]
+           }
+         },
+         "file": {
+           "log-file": [
+             {
+               "name": "file:///var/log/ops.log",
+               "filter": {
+                 "facility-list": [
+                   {
+                     "facility": "ietf-syslog:local0",
+                     "severity": "info"
+                   }
+                 ]
+               },
+               "pattern-match": "LINK-UP",
+               "structured-data": true,
+               "file-rotation": {
+                 "number-of-files": 5,
+                 "max-file-size": 51200,
+                 "rollover": 24,
+                 "retention": 72
+               }
+             }
+           ]
+         },
+         "remote": {
+           "destination": [
+             {
+               "name": "core-collector",
+               "udp": {
+                 "udp": [
+                   {
+                     "address": "198.51.100.10",
+                     "port": 514
+                   }
+                 ]
+               },
+               "filter": {
+               "facility-list": [
+                 {
+                   "facility": "ietf-syslog:authpriv",
+                   "severity": "notice"
+                 }
+               ]
+               },
+               "pattern-match": "SECURITY",
+               "structured-data": true,
+               "facility-override": "ietf-syslog:local4",
+               "source-interface": "MgmtEth0/0/CPU0/0"
+             }
+           ]
+         }
+       }
+     }
+   }
+
+4.2.  XML Representation
+
+   The XML example encodes the same configuration using the mapping in
+   [RFC7950].
+
+   <syslog xmlns="urn:ietf:params:xml:ns:yang:ietf-syslog"
+           xmlns:syslog="urn:ietf:params:xml:ns:yang:ietf-syslog">
+     <actions>
+       <console>
+         <filter>
+           <facility-list>
+             <facility>all</facility>
+             <severity>warning</severity>
+           </facility-list>
+         </filter>
+       </console>
+       <file>
+         <log-file>
+           <name>file:///var/log/ops.log</name>
+           <filter>
+             <facility-list>
+               <facility>syslog:local0</facility>
+               <severity>info</severity>
+             </facility-list>
+           </filter>
+           <pattern-match>LINK-UP</pattern-match>
+           <structured-data>true</structured-data>
+           <file-rotation>
+             <number-of-files>5</number-of-files>
+             <max-file-size>51200</max-file-size>
+             <rollover>24</rollover>
+             <retention>72</retention>
+           </file-rotation>
+         </log-file>
+       </file>
+       <remote>
+         <destination>
+           <name>core-collector</name>
+           <udp>
+             <udp>
+               <address>198.51.100.10</address>
+               <port>514</port>
+             </udp>
+           </udp>
+           <filter>
+             <facility-list>
+               <facility>syslog:authpriv</facility>
+               <severity>notice</severity>
+             </facility-list>
+           </filter>
+           <pattern-match>SECURITY</pattern-match>
+           <structured-data>true</structured-data>
+           <facility-override>syslog:local4</facility-override>
+           <source-interface>MgmtEth0/0/CPU0/0</source-interface>
+         </destination>
+       </remote>
+     </actions>
+   </syslog>
+
+5.  YANG Module
+
+   The normative YANG module is provided below.  It follows the
+   conventions in [I-D.ietf-netmod-rfc8407bis].
+
+   <CODE BEGINS> file "ietf-syslog@2025-04-30.yang"
+module ietf-syslog {
+  yang-version 1.1;
+  namespace "urn:ietf:params:xml:ns:yang:ietf-syslog";
+  prefix syslog;
+
+  import ietf-inet-types {
+    prefix inet;
+    reference
+      "RFC 6991: Common YANG Data Types";
+  }
+  import ietf-interfaces {
+    prefix if;
+    reference
+      "RFC 8343: A YANG Data Model for Interface Management";
+  }
+  import ietf-tls-client {
+    prefix tlsc;
+    reference
+      "RFC 9645: YANG Groupings for TLS Clients and TLS Servers";
+  }
+  import ietf-crypto-types {
+    prefix ct;
+    reference
+      "RFC 9640: YANG Data Types and Groupings for Cryptography";
+  }
+
+  organization
+    "IETF NETMOD (Network Modeling) Working Group";
+  contact
+    "WG Web:   <https://datatracker.ietf.org/wg/netmod/>
+     WG List:  <mailto:netmod@ietf.org>
+
+     Editor:   Mahesh Jethanandani
+     <mailto:mjethanandani@gmail.com>
+
+     Editor:   Joe Clarke
+     <mailto:jclarke@cisco.com>
+
+     Editor:   Kiran Agrahara Sreenivasa
+     <mailto:kirankoushik.agraharasreenivasa@verizonwireless.com>
+
+     Editor:   Clyde Wildes
+     <mailto:clyde@clydewildes.com>";
+  description
+    "This module contains a collection of YANG definitions
+     for syslog management.
+
+     Copyright (c) 2025 IETF Trust and the persons identified as
+     authors of the code.  All rights reserved.
+
+     Redistribution and use in source and binary forms, with or
+     without modification, is permitted pursuant to, and subject
+     to the license terms contained in, the Revised BSD License
+     set forth in Section 4.c of the IETF Trust's Legal
+     Provisions Relating to IETF Documents
+     (https://trustee.ietf.org/license-info).
+
+     This version of this YANG module is part of RFC 9742
+     (https://www.rfc-editor.org/info/rfc9742);
+     see the RFC itself for full legal notices.
+
+     The key words 'MUST', 'MUST NOT', 'REQUIRED', 'SHALL', 'SHALL
+     NOT', 'SHOULD', 'SHOULD NOT', 'RECOMMENDED',
+     'NOT RECOMMENDED', 'MAY', and 'OPTIONAL' in this document
+     are to be interpreted as described in BCP 14 (RFC 2119)
+     (RFC 8174) when, and only when, they appear in all capitals,
+     as shown here.";
+
+  revision 2025-04-30 {
+    description
+      "Initial Revision";
+    reference
+      "RFC 9742: Syslog YANG Module";
+  }
+
+  feature console-action {
+    description
+      "This feature indicates that the local console action is
+       supported.";
+  }
+
+  feature file-action {
+    description
+      "This feature indicates that the local file action is
+       supported.";
+  }
+
+  feature file-limit-size {
+    description
+      "This feature indicates that file logging resources
+       are managed using size and number limits.";
+  }
+
+  feature file-limit-duration {
+    description
+      "This feature indicates that file logging resources
+       are managed using time based limits.";
+  }
+
+  feature remote-action {
+    description
+      "This feature indicates that the remote server action is
+       supported.";
+  }
+
+  feature remote-source-interface {
+    description
+      "This feature indicates that source-interface is supported
+       for the remote-action.";
+  }
+
+  feature select-adv-compare {
+    description
+      "This feature represents the ability to select messages
+       using the additional comparison operators when comparing
+       the syslog message severity.";
+  }
+
+  feature select-match {
+    description
+      "This feature represents the ability to select messages
+       based on a Posix 1003.2 regular expression pattern
+       match.";
+  }
+
+  feature structured-data {
+    description
+      "This feature represents the ability to log messages
+       in structured-data format.";
+    reference
+      "RFC 5424: The Syslog Protocol";
+  }
+
+  feature signed-messages {
+    description
+      "This feature represents the ability to configure signed
+       syslog messages.";
+    reference
+      "RFC 5848: Signed Syslog Messages";
+  }
+
+  typedef syslog-severity {
+    type enumeration {
+      enum emergency {
+        value 0;
+        description
+          "The severity level 'Emergency' indicates that the
+           system is unusable.";
+      }
+      enum alert {
+        value 1;
+        description
+          "The severity level 'Alert' indicates that an
+           action must be taken immediately.";
+      }
+      enum critical {
+        value 2;
+        description
+          "The severity level 'Critical' indicates a
+           critical condition.";
+      }
+      enum error {
+        value 3;
+        description
+          "The severity level 'Error' indicates an error
+           condition.";
+      }
+      enum warning {
+        value 4;
+        description
+          "The severity level 'Warning' indicates a warning
+           condition.";
+      }
+      enum notice {
+        value 5;
+        description
+          "The severity level 'Notice' indicates a normal
+           but significant condition.";
+      }
+      enum info {
+        value 6;
+        description
+          "The severity level 'Info' indicates an
+           informational message.";
+      }
+      enum debug {
+        value 7;
+        description
+          "The severity level 'Debug' indicates a
+           debug-level message.";
+      }
+    }
+    description
+      "The definitions for Syslog message severity.
+       Note that a lower value is a higher severity. Comparisons
+       of equal-or-higher severity mean equal-or-lower numeric
+       value";
+    reference
+      "RFC 5424: The Syslog Protocol";
+  }
+
+  identity syslog-facility {
+    description
+      "This identity is used as a base for all syslog
+       facilities.";
+    reference
+      "RFC 5424: The Syslog Protocol";
+  }
+
+  identity kern {
+    base syslog-facility;
+    description
+      "The facility for kernel messages (numerical code 0).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity user {
+    base syslog-facility;
+    description
+      "The facility for user-level messages (numerical code 1).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity mail {
+    base syslog-facility;
+    description
+      "The facility for the mail system (numerical code 2).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity daemon {
+    base syslog-facility;
+    description
+      "The facility for the system daemons (numerical code 3).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity auth {
+    base syslog-facility;
+    description
+      "The facility for security/authorization messages (numerical
+       code 4).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity syslog {
+    base syslog-facility;
+    description
+      "The facility for messages generated internally by a syslog
+       daemon facility (numerical code 5).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity lpr {
+    base syslog-facility;
+    description
+      "The facility for the line printer subsystem (numerical code
+       6).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity news {
+    base syslog-facility;
+    description
+      "The facility for the network news subsystem (numerical code
+       7).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity uucp {
+    base syslog-facility;
+    description
+      "The facility for the Unix-to-Unix Copy (UUCP) subsystem
+       (numerical code 8).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity cron {
+    base syslog-facility;
+    description
+      "The facility for the clock daemon (numerical code 9).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity authpriv {
+    base syslog-facility;
+    description
+      "The facility for privileged security/authorization messages
+       (numerical code 10).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity ftp {
+    base syslog-facility;
+    description
+      "The facility for the FTP daemon (numerical code 11).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity ntp {
+    base syslog-facility;
+    description
+      "The facility for the NTP subsystem (numerical code 12).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity audit {
+    base syslog-facility;
+    description
+      "The facility for log audit messages (numerical code 13).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity console {
+    base syslog-facility;
+    description
+      "The facility for log alert messages (numerical code 14).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity cron2 {
+    base syslog-facility;
+    description
+      "The facility for the second clock daemon (numerical code
+       15).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local0 {
+    base syslog-facility;
+    description
+      "The facility for local use 0 messages (numerical code 16).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local1 {
+    base syslog-facility;
+    description
+      "The facility for local use 1 messages (numerical code 17).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local2 {
+    base syslog-facility;
+    description
+      "The facility for local use 2 messages (numerical code 18).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local3 {
+    base syslog-facility;
+    description
+      "The facility for local use 3 messages (numerical code 19).";
+    reference
+      "RFC 5424: The Syslog Protocol";
+  }
+
+  identity local4 {
+    base syslog-facility;
+    description
+      "The facility for local use 4 messages (numerical code 20).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local5 {
+    base syslog-facility;
+    description
+      "The facility for local use 5 messages (numerical code 21).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local6 {
+    base syslog-facility;
+    description
+      "The facility for local use 6 messages (numerical code 22).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity local7 {
+    base syslog-facility;
+    description
+      "The facility for local use 7 messages (numerical code 23).";
+    reference
+      "RFC 5424: The Syslog Protocol, Section 6.2.1.";
+  }
+
+  identity action {
+    description
+      "Base identity for action for how a message will be
+       handled.";
+  }
+
+  identity log {
+    base action;
+    description
+      "This identity specifies that if the compare operation is
+       true, the message will be logged.";
+  }
+
+  identity block {
+    base action;
+    description
+      "This identity specifies that if the compare operation is
+       true, the message will not be logged.";
+  }
+
+  identity stop {
+    base action;
+    description
+      "This identity specifies that if the compare operation is
+       true, the message will not be logged and no further
+       processing will occur for it.";
+  }
+
+  grouping severity-filter {
+    description
+      "This grouping defines the processing used to select
+       log messages by comparing syslog message severity using
+       the following processing rules:
+       - if 'none', do not match.
+       - if 'all', match.
+       - else, compare message severity with the specified
+         severity according to the default compare rule (all
+         messages of the specified severity and greater match)
+         or if the select-adv-compare feature is present, use
+         the advance-compare rule.";
+    leaf severity {
+      type union {
+        type syslog-severity;
+        type enumeration {
+          enum none {
+            value 2147483647;
+            description
+              "This enum describes the case where no
+               severities are selected.";
+          }
+          enum all {
+            value -2147483648;
+            description
+              "This enum describes the case where all
+               severities are selected.";
+          }
+        }
+      }
+      mandatory true;
+      description
+        "This leaf specifies the syslog message severity.";
+    }
+    container advanced-compare {
+      when "../severity != \"all\" and
+            ../severity != \"none\"" {
+        description
+          "The advanced compare container is not applicable
+           for severity 'all' or severity 'none'";
+      }
+      if-feature "select-adv-compare";
+      leaf compare {
+        type enumeration {
+          enum equals {
+            description
+              "This enum specifies that the severity
+               comparison operation will be equals.";
+          }
+          enum equals-or-higher {
+            description
+              "This enum specifies that the severity
+               comparison operation will be equals or
+               higher.";
+          }
+        }
+        default "equals-or-higher";
+        description
+          "The compare operation can be used to specify the comparison
+           operator that should be used to compare the syslog
+           message severity with the specified severity.";
+      }
+      leaf action {
+        type identityref {
+          base action;
+        }
+        default "log";
+        description
+          "The action can be used to specify how the message
+           should be handled. This may include logging the
+           message, not logging the message (i.e., blocking
+           it), or stopping further processing.";
+      }
+      description
+        "This container describes additional severity compare
+         operations that can be used in place of the default
+         severity comparison.  The compare leaf specifies the
+         type of compare operation that is done and the
+         action leaf specifies the intended result.
+         Example: compare->equals and action->block means
+         messages that have a severity that are equal to the
+         specified severity will not be logged.";
+    }
+  }
+
+  grouping selector {
+    description
+      "This grouping defines a syslog selector, which is used to
+       select log messages for the log-actions (console, file,
+       remote, etc.).  Choose one or both of the following:
+          facility [<facility> <severity>...]
+          pattern-match regular-expression-match-string
+       If both facility and pattern-match are specified, both
+       must match in order for a log message to be selected.";
+    container filter {
+      description
+        "This container describes the syslog filter
+         parameters.";
+      list facility-list {
+        key "facility severity";
+        ordered-by user;
+        description
+          "This list describes a collection of syslog
+           facilities and severities.";
+        leaf facility {
+          type union {
+            type identityref {
+              base syslog-facility;
+            }
+            type enumeration {
+              enum all {
+                description
+                  "This enum describes the case where
+                   all facilities are requested.";
+              }
+            }
+          }
+          description
+            "The leaf uniquely identifies a syslog
+             facility.";
+        }
+        uses severity-filter;
+      }
+    }
+    leaf pattern-match {
+      if-feature "select-match";
+      type string;
+      description
+        "This leaf describes a Posix 1003.2 regular expression
+         string that can be used to select a syslog message for
+         logging.  The match is performed on the SYSLOG-MSG
+         field.";
+      reference
+        "RFC 5424: The Syslog Protocol
+         Std-1003.1-2024 Regular Expressions";
+    }
+  }
+
+  grouping structured-data {
+    description
+      "This grouping defines the syslog structured data option,
+       which is used to select the format used to write log
+       messages.";
+    leaf structured-data {
+      if-feature "structured-data";
+      type boolean;
+      default "false";
+      description
+        "This leaf describes how log messages are written.
+         If true, messages will be written with one or more
+         STRUCTURED-DATA elements; if false, messages will be
+         written with STRUCTURED-DATA = NILVALUE.";
+      reference
+        "RFC 5424: The Syslog Protocol";
+    }
+  }
+
+  container syslog {
+    presence "Enables logging.";
+    description
+      "This container describes the configuration parameters for
+       syslog.";
+    container actions {
+      description
+        "This container describes the log-action parameters
+         for syslog.";
+      container console {
+        if-feature "console-action";
+        presence "Enables logging to the console";
+        description
+          "This container describes the configuration
+           parameters for console logging.";
+        uses selector;
+      }
+      container file {
+        if-feature "file-action";
+        description
+          "This container describes the configuration
+           parameters for file logging.  If file-archive
+           limits are not supplied, it is assumed that
+           the local implementation defined limits will
+           be used.";
+        list log-file {
+          key "name";
+          description
+            "This list describes a collection of local
+             logging files.";
+          leaf name {
+            type inet:uri {
+              pattern 'file:.*';
+            }
+            description
+              "This leaf specifies the name of the log
+               file, which MUST use the uri scheme
+               file:.";
+            reference
+              "RFC 8089: The file URI Scheme";
+          }
+          uses selector;
+          uses structured-data;
+          container file-rotation {
+            description
+              "This container describes the configuration
+               parameters for log file rotation.";
+            leaf number-of-files {
+              if-feature "file-limit-size";
+              type uint32;
+              default "1";
+              description
+                "This leaf specifies the maximum number
+                 of log files retained.  Specify 1 for
+                 implementations that only support one
+                 log file.";
+            }
+            leaf max-file-size {
+              if-feature "file-limit-size";
+              type uint32;
+              units "megabytes";
+              description
+                "This leaf specifies the maximum log
+                 file size.";
+            }
+            leaf rollover {
+              if-feature "file-limit-duration";
+              type uint32;
+              units "minutes";
+              description
+                "This leaf specifies the length of time
+                 that log events should be written to a
+                 specific log file.  Log events that
+                 arrive after the rollover period cause
+                 the current log file to be closed and
+                 a new log file to be opened.";
+            }
+            leaf retention {
+              if-feature "file-limit-duration";
+              type uint32;
+              units "minutes";
+              description
+                "This leaf specifies the length of time
+                 that completed/closed log event files
+                 should be stored in the file system
+                 before they are removed.";
+            }
+          }
+        }
+      }
+      container remote {
+        if-feature "remote-action";
+        description
+          "This container describes the configuration
+           parameters for forwarding syslog messages
+           to remote relays or collectors.";
+        list destination {
+          key "name";
+          description
+            "This list describes a collection of remote logging
+             destinations.";
+          leaf name {
+            type string;
+            description
+              "An arbitrary name for the endpoint to connect to.";
+          }
+          choice transport {
+            mandatory true;
+            description
+              "This choice describes the transport option.";
+            case udp {
+              container udp {
+                description
+                  "This container describes the UDP transport
+                   options.";
+                reference
+                  "RFC 5426: Transmission of Syslog Messages over
+                             UDP";
+                list udp {
+                  key "address";
+                  description
+                    "List of all UDP sessions.";
+                  leaf address {
+                    type inet:host;
+                    description
+                      "The leaf uniquely specifies the address of the
+                       remote host. One of the following must be
+                       specified:
+                       - an ipv4 address,
+                       - an ipv6 address, or a
+                       - host name.";
+                  }
+                  leaf port {
+                    type inet:port-number;
+                    default "514";
+                    description
+                      "This leaf specifies the port number used to
+                       deliver messages to the remote server.";
+                  }
+                }
+              }
+            }
+            case tls {
+              container tls {
+                description
+                  "This container describes the TLS transport
+                   options.";
+                reference
+                  "RFC 5425: Transport Layer Security (TLS) Transport
+                             Mapping for Syslog ";
+                list tls {
+                  key "address";
+                  description
+                    "List of all TLS-based sessions.";
+                  leaf address {
+                    type inet:host;
+                    description
+                      "The leaf uniquely specifies the address of the
+                       remote host.  One of the following must be
+                       specified: an ipv4 address, an ipv6 address,
+                       or a host name.";
+                  }
+                  leaf port {
+                    type inet:port-number;
+                    default "6514";
+                    description
+                      "TCP port 6514 has been allocated as the
+                       default port for syslog over TLS.";
+                  }
+                  uses tlsc:tls-client-grouping;
+                }
+              }
+            }
+          }
+          uses selector;
+          uses structured-data;
+          leaf facility-override {
+            type identityref {
+              base syslog-facility;
+            }
+            description
+              "If specified, this leaf specifies the facility used
+               to override the facility in messages delivered to the
+               remote server.";
+          }
+          leaf source-interface {
+            if-feature "remote-source-interface";
+            type if:interface-ref;
+            description
+              "This leaf sets the source interface to be used to
+               send messages to the remote syslog server. If not set,
+               messages can be sent on any interface.";
+          }
+          container signing {
+            if-feature "signed-messages";
+            presence "If present, syslog-signing options is
+                      activated.";
+            description
+              "This container describes the configuration
+               parameters for signed syslog messages.";
+            reference
+              "RFC 5848: Signed Syslog Messages";
+            container cert-signers {
+              description
+                "This container describes the signing certificate
+                 configuration for Signature Group 0, which covers
+                 the case for administrators who want all Signature
+                 Blocks to be sent to a single destination.";
+              list cert-signer {
+                key "name";
+                description
+                  "This list describes a collection of syslog message
+                   signers.";
+                leaf name {
+                  type string;
+                  description
+                    "This leaf specifies the name of the syslog
+                     message signer.";
+                }
+                container cert {
+                  uses ct:asymmetric-key-pair-with-cert-grouping;
+                  description
+                    "This is the certificate that is periodically
+                     sent to the remote receiver.  The certificate is
+                     inherently associated with its private
+                     and public keys.";
+                }
+                leaf hash-algorithm {
+                  type enumeration {
+                    enum SHA1 {
+                      value 1;
+                      description
+                        "This enum describes the SHA1 algorithm.";
+                    }
+                    enum SHA256 {
+                      value 2;
+                      description
+                        "This enum describes the SHA256 algorithm.";
+                    }
+                  }
+                  description
+                    "This leaf describes the syslog signer hash
+                     algorithm used.";
+                }
+              }
+              leaf cert-initial-repeat {
+                type uint32;
+                default "3";
+                description
+                  "This leaf specifies the number of times each
+                   Certificate Block should be sent before the first
+                   message is sent.";
+              }
+              leaf cert-resend-delay {
+                type uint32;
+                units "seconds";
+                default "3600";
+                description
+                  "This leaf specifies the maximum time delay in
+                   seconds until resending the Certificate Block.";
+              }
+              leaf cert-resend-count {
+                type uint32;
+                default "0";
+                description
+                  "This leaf specifies the maximum number of other
+                   syslog messages to send until resending the
+                   Certificate Block.";
+              }
+              leaf sig-max-delay {
+                type uint32;
+                units "seconds";
+                default "60";
+                description
+                  "This leaf specifies when to generate a new
+                   Signature Block. If this many seconds have elapsed
+                   since the message with the first message number
+                   of the Signature Block was sent, a new Signature
+                   Block should be generated.";
+              }
+              leaf sig-number-resends {
+                type uint32;
+                default "0";
+                description
+                  "This leaf specifies the number of times a
+                   Signature Block is resent.  (It is recommended to
+                   select a value of greater than 0 in particular
+                   when the UDP transport as in RFC 5426 is used.)";
+              }
+              leaf sig-resend-delay {
+                type uint32;
+                units "seconds";
+                default "5";
+                description
+                  "This leaf specifies when to send the next
+                   Signature Block transmission based on time.  If
+                   this many seconds have elapsed since the previous
+                   sending of this Signature Block, resend it.";
+              }
+              leaf sig-resend-count {
+                type uint32;
+                default "0";
+                description
+                  "This leaf specifies when to send the next
+                   Signature Block transmission based on a count.
+                   If this many other syslog messages have been sent
+                   since the previous sending of this Signature
+                   Block, resend it. A value of 0 means that you
+                   don't resend based on the number of messages.";
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+<CODE ENDS>
+
+6.  Manageability Considerations
+
+   Configuration of syslog is inherently safety-critical because
+   misrouted or suppressed log messages hinder troubleshooting and
+   forensic workflows.  Operators SHOULD ensure that transaction-based
+   protocols such as NETCONF or RESTCONF are used so that updates to the
+   syslog container can be validated and committed atomically.  When the
+   file-rotation parameters are omitted, the device applies
+   implementation-specific defaults that SHOULD be documented.
+
+   Implementations are encouraged to augment the model with operational
+   state such as counters or the status of TLS sessions.  When such
+   augmentations are present, they SHOULD be reported in the
+   <operational> datastore and referenced in vendor documentation.
+
+7.  Implementation Status
+
+   NOTE TO RFC EDITOR: This section is to be removed before publication.
+
+   This section is written using the template described in RFC 7942.
+
+   The ietf-syslog module has been validated using the pyang 2.7.1 tool
+   chain.  The authors are experimenting with auto-generation pipelines
+   that convert hand-authored YANG modules into full Internet-Drafts.
+   Feedback from implementers is welcome on the NETMOD mailing list.
+
+8.  Security Considerations
+
+   This section is modeled after the template described in Section 3.7
+   of [I-D.ietf-netmod-rfc8407bis].
+
+   The "ietf-syslog" YANG module defines a data model that is designed
+   to be accessed via YANG-based management protocols such as
+   NETCONF [RFC6241] and RESTCONF [RFC8040].  These protocols MUST run
+   over secure transports (e.g., SSH [RFC4252], TLS [RFC8446], or QUIC
+   [RFC9000]) and MUST use mutual authentication.
+
+   The Network Configuration Access Control Model (NACM) [RFC8341]
+   provides the means to restrict access for particular NETCONF or
+   RESTCONF users to a preconfigured subset of protocol operations and
+   data nodes.
+
+   There are a number of data nodes defined in this YANG module that are
+   writable/creatable/deletable (i.e., "config true").  All writable
+   data nodes are likely to be sensitive in some deployments because
+   misconfigurations can suppress logging or leak operational data.
+   Write operations (e.g., edit-config) and delete operations to these
+   data nodes without proper protection or authentication can have a
+   negative effect on network operations.  The following subtrees have
+   particular sensitivities/vulnerabilities:
+
+   *  /syslog/actions/console/filter
+
+   *  /syslog/actions/file/log-file, including file-rotation parameters
+
+   *  /syslog/actions/remote, including destination/filter, transport
+      selection, source-interface, and facility-override
+
+   *  /syslog/actions/remote/destination/signing
+
+   *  /syslog/actions/remote/destination/signing/cert-signers/cert
+
+   Administrators SHOULD enforce NACM policies so that only trusted
+   operators can alter these nodes.
+
+   Some of the readable data nodes in this YANG module may be considered
+   sensitive or vulnerable in some network environments.  It is thus
+   important to control read access (e.g., via get, get-config, or
+   notification) to these data nodes.  Specifically, the following
+   subtrees have particular sensitivities/vulnerabilities:
+
+   *  /syslog/actions/*/filter/facility-list and /syslog/actions/*
+      /pattern-match, which may reveal investigative focus or regular
+      expressions that include personally identifiable information
+
+   *  /syslog/actions/file/log-file/file-rotation, which can disclose
+      retention policies
+
+   *  /syslog/actions/remote/destination/signing, including the
+      certificates and private-key references supplied through the
+      ietf-crypto-types grouping
+
+   *  /syslog/actions/remote/destination/udp or /tls lists, which reveal
+      collector addresses and ports
+
+   There are no RPC or action operations defined in this YANG module,
+   and therefore there are no particularly sensitive RPC or action
+   operations to report.
+
+   This YANG module uses groupings from other YANG modules that define
+   nodes that may be considered sensitive or vulnerable in network
+   environments.  Refer to the Security Considerations of [RFC9645] and
+   [RFC9640] for information about the TLS credential and cryptographic
+   material nodes imported via those groupings.
+
+   Properly configured devices should also rate-limit remote log export,
+   monitor for repeated signature-block retransmissions, and audit
+   configuration changes made to the ietf-syslog container itself.
+
+9.  Privacy Considerations
+
+   The syslog selectors can target user-identifying strings (e.g., login
+   names embedded in messages).  When northbound interfaces expose the
+   full configuration, those filters may reveal investigative focus or
+   protected PII.  Administrators SHOULD rely on datastore access
+   controls to limit who can read syslog configuration and SHOULD scrub
+   archived configurations before sharing them outside the operations
+   team.
+
+10.  IANA Considerations
+
+   The IANA is requested to register the following URI in the "IETF XML
+   Registry" [RFC3688]:
+
+      URI:  urn:ietf:params:xml:ns:yang:ietf-syslog
+      Registrant Contact:  The IESG
+      XML:  N/A; the requested URI is an XML namespace.
+
+   The IANA is also requested to register the following entry in the
+   "YANG Module Names" registry [RFC6020]:
+
+      name:         ietf-syslog
+      namespace:    urn:ietf:params:xml:ns:yang:ietf-syslog
+      prefix:       syslog
+      reference:    RFC XXXX
+
+11.  References
+
+11.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174,
+              DOI 10.17487/RFC8174, May 2017,
+              <https://www.rfc-editor.org/info/rfc8174>.
+
+   [RFC3688]  Mealling, M., "The IETF XML Registry", BCP 81,
+              RFC 3688, DOI 10.17487/RFC3688, January 2004,
+              <https://www.rfc-editor.org/info/rfc3688>.
+
+   [RFC6020]  Bjorklund, M., "YANG - A Data Modeling Language for the
+              Network Configuration Protocol (NETCONF)", RFC 6020,
+              DOI 10.17487/RFC6020, October 2010,
+              <https://www.rfc-editor.org/info/rfc6020>.
+
+   [RFC5424]  Gerhards, R., "The Syslog Protocol", RFC 5424,
+              DOI 10.17487/RFC5424, March 2009,
+              <https://www.rfc-editor.org/info/rfc5424>.
+
+   [RFC5425]  Miao, F., Ed., Ma, Y., Ed., and J. Salowey, Ed., "Transport
+              Layer Security (TLS) Transport Mapping for Syslog",
+              RFC 5425, DOI 10.17487/RFC5425, March 2009,
+              <https://www.rfc-editor.org/info/rfc5425>.
+
+   [RFC5426]  Okmianski, A., "Transmission of Syslog Messages over UDP",
+              RFC 5426, DOI 10.17487/RFC5426, March 2009,
+              <https://www.rfc-editor.org/info/rfc5426>.
+
+   [RFC5848]  Kelsey, J., Callas, J., and A. Clemm, "Signed Syslog
+              Messages", RFC 5848, DOI 10.17487/RFC5848, May 2010,
+              <https://www.rfc-editor.org/info/rfc5848>.
+
+   [RFC6991]  Schoenwaelder, J., Ed., "Common YANG Data Types",
+              RFC 6991, DOI 10.17487/RFC6991, July 2013,
+              <https://www.rfc-editor.org/info/rfc6991>.
+
+   [RFC7950]  Bjorklund, M., Ed., "The YANG 1.1 Data Modeling Language",
+              RFC 7950, DOI 10.17487/RFC7950, August 2016,
+              <https://www.rfc-editor.org/info/rfc7950>.
+
+   [RFC7951]  Lhotka, L., "JSON Encoding of Data Modeled with YANG",
+              RFC 7951, DOI 10.17487/RFC7951, August 2016,
+              <https://www.rfc-editor.org/info/rfc7951>.
+
+   [RFC8340]  Bjorklund, M. and L. Berger, "YANG Tree Diagrams",
+              BCP 215, RFC 8340, DOI 10.17487/RFC8340, March 2018,
+              <https://www.rfc-editor.org/info/rfc8340>.
+
+   [RFC8341]  Bierman, A. and M. Bjorklund, "Network Configuration
+              Access Control Model (NACM)", RFC 8341,
+              DOI 10.17487/RFC8341, March 2018,
+              <https://www.rfc-editor.org/info/rfc8341>.
+
+   [RFC8342]  Bjorklund, M., Schoenwaelder, J., Shafer, P., Watsen, K.,
+              and R. Wilton, "Network Management Datastore
+              Architecture (NMDA)", RFC 8342, DOI 10.17487/RFC8342,
+              March 2018, <https://www.rfc-editor.org/info/rfc8342>.
+
+   [RFC8343]  Bjorklund, M., "A YANG Data Model for Interface
+              Management", RFC 8343, DOI 10.17487/RFC8343, March 2018,
+              <https://www.rfc-editor.org/info/rfc8343>.
+
+   [RFC9640]  Watsen, K., Gonzalez Palmer, D., Wu, Q., Boucadair, M.,
+              and S. Hares, "YANG Data Types and Groupings for
+              Cryptography", RFC 9640, DOI 10.17487/RFC9640, April 2024,
+              <https://www.rfc-editor.org/info/rfc9640>.
+
+   [RFC9645]  Watsen, K., Gonzalez Palmer, D., Wu, Q., Boucadair, M.,
+              and S. Hares, "YANG Groupings for TLS Clients and TLS
+              Servers", RFC 9645, DOI 10.17487/RFC9645, April 2024,
+              <https://www.rfc-editor.org/info/rfc9645>.
+
+   [RFC4252]  Ylonen, T. and C. Lonvick, Ed., "The Secure Shell (SSH)
+              Authentication Protocol", RFC 4252,
+              DOI 10.17487/RFC4252, January 2006,
+              <https://www.rfc-editor.org/info/rfc4252>.
+
+   [RFC6241]  Enns, R., Ed., Bjorklund, M., Ed., Schoenwaelder, J., Ed.,
+              and A. Bierman, Ed., "Network Configuration Protocol
+              (NETCONF)", RFC 6241, DOI 10.17487/RFC6241, June 2011,
+              <https://www.rfc-editor.org/info/rfc6241>.
+
+   [RFC8040]  Bierman, A., Bjorklund, M., and K. Watsen, "RESTCONF
+              Protocol", RFC 8040, DOI 10.17487/RFC8040, January 2017,
+              <https://www.rfc-editor.org/info/rfc8040>.
+
+   [RFC8446]  Rescorla, E., "The Transport Layer Security (TLS) Protocol
+              Version 1.3", RFC 8446, DOI 10.17487/RFC8446,
+              August 2018, <https://www.rfc-editor.org/info/rfc8446>.
+
+   [RFC9000]  Iyengar, J. and M. Thomson, "QUIC: A UDP-Based Multiplexed
+              and Secure Transport", RFC 9000,
+              DOI 10.17487/RFC9000, May 2021,
+              <https://www.rfc-editor.org/info/rfc9000>.
+
+11.2.  Informative References
+
+   [I-D.ietf-netmod-rfc8407bis]
+              Bierman, A., Boucadair, M., Wu, Q., and M. Boucadair,
+              "Guidelines for Authors and Reviewers of Documents
+              Containing YANG Data Models", Work in Progress,
+              Internet-Draft, draft-ietf-netmod-rfc8407bis-28, 5 June
+              2025.
+
+   [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of
+              Running Code: The Implementation Status Section",
+              BCP 205, RFC 7942, DOI 10.17487/RFC7942, July 2016,
+              <https://www.rfc-editor.org/info/rfc7942>.
+
+   [RFC8199]  Bogdanovic, D., Claise, B., and C. Moberg, "YANG Module
+              Classification", RFC 8199, DOI 10.17487/RFC8199,
+              July 2017, <https://www.rfc-editor.org/info/rfc8199>.
+
+   [RFC8309]  Wu, Q., Ed., Litkowski, S., Tomotaki, L., and K. Ogaki,
+              "Service Models Explained", RFC 8309, DOI 10.17487/RFC8309,
+              January 2018, <https://www.rfc-editor.org/info/rfc8309>.
+
+   [RFC8969]  Wu, Q., Boucadair, M., Luo, Y., Xie, C., and Y. Niu,
+              "IETF Network Slice Framework", RFC 8969,
+              DOI 10.17487/RFC8969, January 2021,
+              <https://www.rfc-editor.org/info/rfc8969>.
+
+12.  Acknowledgements
+
+   The authors thank the NETMOD Working Group for the extensive review
+   guidance captured in [I-D.ietf-netmod-rfc8407bis], and the developers
+   of pyang for tooling support that made this experiment possible.
+
+13.  Contributors
+
+   Joe Clarke initiated the experiment that automatically produced this
+   draft from the ietf-syslog module.  Feedback from Clyde Wildes and
+   Kiran Agrahara Sreenivasa shaped the selector, signing, and remote
+   transport text.
+
+Appendix A.  pyang Invocation
+
+   The following commands were used during draft preparation:
+
+      pyang -f tree --tree-line-length 69 \
+           -p ~/src/git/ietf-tools-yang/standard/ietf/RFC \
+           ietf-syslog@2025-04-30.yang
+
+      pyang -f yang --keep-comments --yang-line-length 69 \
+           -p ~/src/git/ietf-tools-yang/standard/ietf/RFC \
+           ietf-syslog@2025-04-30.yang \
+           > ietf-syslog@2025-04-30.formatted.yang
+
+Appendix B.  Complete Tree Diagram
+
+   The complete tree diagram is provided below for reference.  It was
+   generated using the command shown in Appendix A.
+
+   module: ietf-syslog
+  +--rw syslog!
+     +--rw actions
+        +--rw console! {console-action}?
+        |  +--rw filter
+        |  |  +--rw facility-list* [facility severity]
+        |  |     +--rw facility            union
+        |  |     +--rw severity            union
+        |  |     +--rw advanced-compare {select-adv-compare}?
+        |  |        +--rw compare?   enumeration
+        |  |        +--rw action?    identityref
+        |  +--rw pattern-match?   string {select-match}?
+        +--rw file {file-action}?
+        |  +--rw log-file* [name]
+        |     +--rw name               inet:uri
+        |     +--rw filter
+        |     |  +--rw facility-list* [facility severity]
+        |     |     +--rw facility            union
+        |     |     +--rw severity            union
+        |     |     +--rw advanced-compare {select-adv-compare}?
+        |     |        +--rw compare?   enumeration
+        |     |        +--rw action?    identityref
+        |     +--rw pattern-match?     string {select-match}?
+        |     +--rw structured-data?   boolean {structured-data}?
+        |     +--rw file-rotation
+        |        +--rw number-of-files?   uint32 {file-limit-size}?
+        |        +--rw max-file-size?     uint32 {file-limit-size}?
+        |        +--rw rollover?          uint32
+        |        |       {file-limit-duration}?
+        |        +--rw retention?         uint32
+        |                {file-limit-duration}?
+        +--rw remote {remote-action}?
+           +--rw destination* [name]
+              +--rw name                 string
+              +--rw (transport)
+              |  +--:(udp)
+              |  |  +--rw udp
+              |  |     +--rw udp* [address]
+              |  |        +--rw address    inet:host
+              |  |        +--rw port?      inet:port-number
+              |  +--:(tls)
+              |     +--rw tls
+              |        +--rw tls* [address]
+              |           +--rw address                  inet:host
+              |           +--rw port?
+              |           |       inet:port-number
+              |           +--rw client-identity!
+              |           |  +--rw (auth-type)
+              |           |     +--:(certificate)
+              |           |     |        {client-ident-x509-cert}?
+              |           |     |  +--rw certificate
+              |           |     |     +--rw (inline-or-keystore)
+              |           |     |        +--:(inline)
+              |           |     |        |        {inline-definitions-supported}?
+              |           |     |        |  +--rw inline-definition
+              |           |     |        |     +--rw public-key-format?
+              |           |     |        |     |       identityref
+              |           |     |        |     +--rw public-key?
+              |           |     |        |     |       binary
+              |           |     |        |     +--rw private-key-format?
+              |           |     |        |     |       identityref
+              |           |     |        |     +--rw (private-key-type)
+              |           |     |        |     |  +--:(cleartext-private-key)
+              |           |     |        |     |  |        {cleartext-private-keys}?
+              |           |     |        |     |  |  +--rw cleartext-private-key?
+              |           |     |        |     |  |          binary
+              |           |     |        |     |  +--:(hidden-private-key)
+              |           |     |        |     |  |        {hidden-private-keys}?
+              |           |     |        |     |  |  +--rw hidden-private-key?
+              |           |     |        |     |  |          empty
+              |           |     |        |     |  +--:(encrypted-private-key)
+              |           |     |        |     |           {encrypted-private-keys}?
+              |           |     |        |     |     +--rw encrypted-private-key
+              |           |     |        |     |        +--rw encrypted-by
+              |           |     |        |     |        +--rw encrypted-value-format
+              |           |     |        |     |        |       identityref
+              |           |     |        |     |        +--rw encrypted-value
+              |           |     |        |     |                binary
+              |           |     |        |     +--rw cert-data?
+              |           |     |        |     |       end-entity-cert-cms
+              |           |     |        |     +---n certificate-expiration
+              |           |     |        |     |       {certificate-expiration-notification}?
+              |           |     |        |     |  +-- expiration-date
+              |           |     |        |     |          yang:date-and-time
+              |           |     |        |     +---x generate-csr
+              |           |     |        |             {csr-generation}?
+              |           |     |        |        +---w input
+              |           |     |        |        |  +---w csr-format
+              |           |     |        |        |  |       identityref
+              |           |     |        |        |  +---w csr-info
+              |           |     |        |        |          csr-info
+              |           |     |        |        +--ro output
+              |           |     |        |           +--ro (csr-type)
+              |           |     |        |              +--:(p10-csr)
+              |           |     |        |                 +--ro p10-csr?
+              |           |     |        |                         p10-csr
+              |           |     |        +--:(central-keystore)
+              |           |     |                 {central-keystore-supported,asymmetric-keys}?
+              |           |     |           +--rw central-keystore-reference
+              |           |     |              +--rw asymmetric-key?
+              |           |     |              |       ks:central-asymmetric-key-ref
+              |           |     |              |       {central-keystore-supported,asymmetric-keys}?
+              |           |     |              +--rw certificate?
+              |           |     |                      leafref
+              |           |     +--:(raw-public-key)
+              |           |     |        {client-ident-raw-public-key}?
+              |           |     |  +--rw raw-private-key
+              |           |     |     +--rw (inline-or-keystore)
+              |           |     |        +--:(inline)
+              |           |     |        |        {inline-definitions-supported}?
+              |           |     |        |  +--rw inline-definition
+              |           |     |        |     +--rw public-key-format?
+              |           |     |        |     |       identityref
+              |           |     |        |     +--rw public-key?
+              |           |     |        |     |       binary
+              |           |     |        |     +--rw private-key-format?
+              |           |     |        |     |       identityref
+              |           |     |        |     +--rw (private-key-type)
+              |           |     |        |        +--:(cleartext-private-key)
+              |           |     |        |        |        {cleartext-private-keys}?
+              |           |     |        |        |  +--rw cleartext-private-key?
+              |           |     |        |        |          binary
+              |           |     |        |        +--:(hidden-private-key)
+              |           |     |        |        |        {hidden-private-keys}?
+              |           |     |        |        |  +--rw hidden-private-key?
+              |           |     |        |        |          empty
+              |           |     |        |        +--:(encrypted-private-key)
+              |           |     |        |                 {encrypted-private-keys}?
+              |           |     |        |           +--rw encrypted-private-key
+              |           |     |        |              +--rw encrypted-by
+              |           |     |        |              +--rw encrypted-value-format
+              |           |     |        |              |       identityref
+              |           |     |        |              +--rw encrypted-value
+              |           |     |        |                      binary
+              |           |     |        +--:(central-keystore)
+              |           |     |                 {central-keystore-supported,asymmetric-keys}?
+              |           |     |           +--rw central-keystore-reference?
+              |           |     |                   ks:central-asymmetric-key-ref
+              |           |     +--:(tls12-psk)
+              |           |     |        {client-ident-tls12-psk}?
+              |           |     |  +--rw tls12-psk
+              |           |     |     +--rw (inline-or-keystore)
+              |           |     |     |  +--:(inline)
+              |           |     |     |  |        {inline-definitions-supported}?
+              |           |     |     |  |  +--rw inline-definition
+              |           |     |     |  |     +--rw key-format?
+              |           |     |     |  |     |       identityref
+              |           |     |     |  |     +--rw (key-type)
+              |           |     |     |  |        +--:(cleartext-symmetric-key)
+              |           |     |     |  |        |  +--rw cleartext-symmetric-key?
+              |           |     |     |  |        |          binary
+              |           |     |     |  |        |          {cleartext-symmetric-keys}?
+              |           |     |     |  |        +--:(hidden-symmetric-key)
+              |           |     |     |  |        |        {hidden-symmetric-keys}?
+              |           |     |     |  |        |  +--rw hidden-symmetric-key?
+              |           |     |     |  |        |          empty
+              |           |     |     |  |        +--:(encrypted-symmetric-key)
+              |           |     |     |  |                 {encrypted-symmetric-keys}?
+              |           |     |     |  |           +--rw encrypted-symmetric-key
+              |           |     |     |  |              +--rw encrypted-by
+              |           |     |     |  |              +--rw encrypted-value-format
+              |           |     |     |  |              |       identityref
+              |           |     |     |  |              +--rw encrypted-value
+              |           |     |     |  |                      binary
+              |           |     |     |  +--:(central-keystore)
+              |           |     |     |           {central-keystore-supported,symmetric-keys}?
+              |           |     |     |     +--rw central-keystore-reference?
+              |           |     |     |             ks:central-symmetric-key-ref
+              |           |     |     +--rw id?
+              |           |     |             string
+              |           |     +--:(tls13-epsk)
+              |           |              {client-ident-tls13-epsk}?
+              |           |        +--rw tls13-epsk
+              |           |           +--rw (inline-or-keystore)
+              |           |           |  +--:(inline)
+              |           |           |  |        {inline-definitions-supported}?
+              |           |           |  |  +--rw inline-definition
+              |           |           |  |     +--rw key-format?
+              |           |           |  |     |       identityref
+              |           |           |  |     +--rw (key-type)
+              |           |           |  |        +--:(cleartext-symmetric-key)
+              |           |           |  |        |  +--rw cleartext-symmetric-key?
+              |           |           |  |        |          binary
+              |           |           |  |        |          {cleartext-symmetric-keys}?
+              |           |           |  |        +--:(hidden-symmetric-key)
+              |           |           |  |        |        {hidden-symmetric-keys}?
+              |           |           |  |        |  +--rw hidden-symmetric-key?
+              |           |           |  |        |          empty
+              |           |           |  |        +--:(encrypted-symmetric-key)
+              |           |           |  |                 {encrypted-symmetric-keys}?
+              |           |           |  |           +--rw encrypted-symmetric-key
+              |           |           |  |              +--rw encrypted-by
+              |           |           |  |              +--rw encrypted-value-format
+              |           |           |  |              |       identityref
+              |           |           |  |              +--rw encrypted-value
+              |           |           |  |                      binary
+              |           |           |  +--:(central-keystore)
+              |           |           |           {central-keystore-supported,symmetric-keys}?
+              |           |           |     +--rw central-keystore-reference?
+              |           |           |             ks:central-symmetric-key-ref
+              |           |           +--rw external-identity
+              |           |           |       string
+              |           |           +--rw hash?
+              |           |           |       tlscmn:epsk-supported-hash
+              |           |           +--rw context?
+              |           |           |       string
+              |           |           +--rw target-protocol?
+              |           |           |       uint16
+              |           |           +--rw target-kdf?
+              |           |                   uint16
+              |           +--rw server-authentication
+              |           |  +--rw ca-certs! {server-auth-x509-cert}?
+              |           |  |  +--rw (inline-or-truststore)
+              |           |  |     +--:(inline)
+              |           |  |     |        {inline-definitions-supported}?
+              |           |  |     |  +--rw inline-definition
+              |           |  |     |     +--rw certificate* [name]
+              |           |  |     |        +--rw name
+              |           |  |     |        |       string
+              |           |  |     |        +--rw cert-data
+              |           |  |     |        |       trust-anchor-cert-cms
+              |           |  |     |        +---n certificate-expiration
+              |           |  |     |                {certificate-expiration-notification}?
+              |           |  |     |           +-- expiration-date
+              |           |  |     |                   yang:date-and-time
+              |           |  |     +--:(central-truststore)
+              |           |  |              {central-truststore-supported,certificates}?
+              |           |  |        +--rw central-truststore-reference?
+              |           |  |                ts:central-certificate-bag-ref
+              |           |  +--rw ee-certs! {server-auth-x509-cert}?
+              |           |  |  +--rw (inline-or-truststore)
+              |           |  |     +--:(inline)
+              |           |  |     |        {inline-definitions-supported}?
+              |           |  |     |  +--rw inline-definition
+              |           |  |     |     +--rw certificate* [name]
+              |           |  |     |        +--rw name
+              |           |  |     |        |       string
+              |           |  |     |        +--rw cert-data
+              |           |  |     |        |       trust-anchor-cert-cms
+              |           |  |     |        +---n certificate-expiration
+              |           |  |     |                {certificate-expiration-notification}?
+              |           |  |     |           +-- expiration-date
+              |           |  |     |                   yang:date-and-time
+              |           |  |     +--:(central-truststore)
+              |           |  |              {central-truststore-supported,certificates}?
+              |           |  |        +--rw central-truststore-reference?
+              |           |  |                ts:central-certificate-bag-ref
+              |           |  +--rw raw-public-keys!
+              |           |  |       {server-auth-raw-public-key}?
+              |           |  |  +--rw (inline-or-truststore)
+              |           |  |     +--:(inline)
+              |           |  |     |        {inline-definitions-supported}?
+              |           |  |     |  +--rw inline-definition
+              |           |  |     |     +--rw public-key* [name]
+              |           |  |     |        +--rw name
+              |           |  |     |        |       string
+              |           |  |     |        +--rw public-key-format
+              |           |  |     |        |       identityref
+              |           |  |     |        +--rw public-key
+              |           |  |     |                binary
+              |           |  |     +--:(central-truststore)
+              |           |  |              {central-truststore-supported,public-keys}?
+              |           |  |        +--rw central-truststore-reference?
+              |           |  |                ts:central-public-key-bag-ref
+              |           |  +--rw tls12-psks?        empty
+              |           |  |       {server-auth-tls12-psk}?
+              |           |  +--rw tls13-epsks?       empty
+              |           |          {server-auth-tls13-epsk}?
+              |           +--rw hello-params {tlscmn:hello-params}?
+              |           |  +--rw tls-versions
+              |           |  |  +--rw min?   identityref
+              |           |  |  +--rw max?   identityref
+              |           |  +--rw cipher-suites
+              |           |     +--rw cipher-suite*
+              |           |             tlscsa:tls-cipher-suite-algorithm
+              |           +--rw keepalives {tls-client-keepalives}?
+              |              +--rw peer-allowed-to-send?   empty
+              |              +--rw test-peer-aliveness!
+              |                 +--rw max-wait?       uint16
+              |                 +--rw max-attempts?   uint8
+              +--rw filter
+              |  +--rw facility-list* [facility severity]
+              |     +--rw facility            union
+              |     +--rw severity            union
+              |     +--rw advanced-compare {select-adv-compare}?
+              |        +--rw compare?   enumeration
+              |        +--rw action?    identityref
+              +--rw pattern-match?       string {select-match}?
+              +--rw structured-data?     boolean {structured-data}?
+              +--rw facility-override?   identityref
+              +--rw source-interface?    if:interface-ref
+              |       {remote-source-interface}?
+              +--rw signing! {signed-messages}?
+                 +--rw cert-signers
+                    +--rw cert-signer* [name]
+                    |  +--rw name              string
+                    |  +--rw cert
+                    |  |  +--rw public-key-format?
+                    |  |  |       identityref
+                    |  |  +--rw public-key?                    binary
+                    |  |  +--rw private-key-format?
+                    |  |  |       identityref
+                    |  |  +--rw (private-key-type)
+                    |  |  |  +--:(cleartext-private-key)
+                    |  |  |  |        {cleartext-private-keys}?
+                    |  |  |  |  +--rw cleartext-private-key?   binary
+                    |  |  |  +--:(hidden-private-key)
+                    |  |  |  |        {hidden-private-keys}?
+                    |  |  |  |  +--rw hidden-private-key?      empty
+                    |  |  |  +--:(encrypted-private-key)
+                    |  |  |           {encrypted-private-keys}?
+                    |  |  |     +--rw encrypted-private-key
+                    |  |  |        +--rw encrypted-by
+                    |  |  |        +--rw encrypted-value-format
+                    |  |  |        |       identityref
+                    |  |  |        +--rw encrypted-value
+                    |  |  |                binary
+                    |  |  +--rw cert-data?
+                    |  |  |       end-entity-cert-cms
+                    |  |  +---n certificate-expiration
+                    |  |  |       {certificate-expiration-notification}?
+                    |  |  |  +-- expiration-date
+                    |  |  |          yang:date-and-time
+                    |  |  +---x generate-csr {csr-generation}?
+                    |  |     +---w input
+                    |  |     |  +---w csr-format    identityref
+                    |  |     |  +---w csr-info      csr-info
+                    |  |     +--ro output
+                    |  |        +--ro (csr-type)
+                    |  |           +--:(p10-csr)
+                    |  |              +--ro p10-csr?   p10-csr
+                    |  +--rw hash-algorithm?   enumeration
+                    +--rw cert-initial-repeat?   uint32
+                    +--rw cert-resend-delay?     uint32
+                    +--rw cert-resend-count?     uint32
+                    +--rw sig-max-delay?         uint32
+                    +--rw sig-number-resends?    uint32
+                    +--rw sig-resend-delay?      uint32
+                    +--rw sig-resend-count?      uint32
+
+
+Authors' Addresses
+
+   Mahesh Jethanandani
+   Kloud Services
+   Email: mjethanandani@gmail.com
+
+   Joe Clarke
+   Cisco Systems, Inc.
+   Email: jclarke@cisco.com
+
+   Kiran Agrahara Sreenivasa
+   Verizon Inc.
+   Email: kirankoushik.agraharasreenivasa@verizonwireless.com
+
+   Clyde Wildes
+   Independent Consultant
+   Email: clyde@clydewildes.com
