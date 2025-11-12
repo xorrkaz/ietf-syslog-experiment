@@ -22,4 +22,6 @@ This is the prompt I gave the AI:
 ## Disclaimer
 
 Nothing in the example `.json` and `.xml` files or the draft `.txt` file was human-authored.  Codex
-wrote all the prose and embedded the YANG module that was extracted from RFC9742.
+wrote all the prose and embedded the YANG module that was extracted from RFC9742.  This has no
+bearing on official IETF process and nothing in this repo should be considered as official
+IETF artifacts.
